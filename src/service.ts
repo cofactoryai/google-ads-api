@@ -1,5 +1,5 @@
 import { grpc } from "google-gax";
-import { UserRefreshClient } from "google-auth-library";
+import { UserRefreshClient, JWT } from "google-auth-library";
 import { ClientOptions } from "./client";
 import {
   AllServices,
@@ -78,21 +78,31 @@ export class Service {
     return headers;
   }
 
-  private getCredentials(): grpc.ChannelCredentials {
+  private async getCredentials(): Promise<grpc.ChannelCredentials> {
+    let authClient;
     const sslCreds = grpc.credentials.createSsl();
-    const authClient = new UserRefreshClient(
-      this.clientOptions.client_id,
-      this.clientOptions.client_secret,
-      this.customerOptions.refresh_token
-    );
-    const credentials = grpc.credentials.combineChannelCredentials(
-      sslCreds,
-      grpc.credentials.createFromGoogleCredential(authClient)
-    );
+
+    let keyFile;
+    if (this.clientOptions.service_account_key_file) {
+      keyFile = await import(this.clientOptions.service_account_key_file);
+      authClient = new JWT({
+        email: keyFile.client_email,
+        key: keyFile.private_key,
+        scopes: ['https://www.googleapis.com/auth/adwords'],
+      });
+    } else {
+      authClient = new UserRefreshClient(
+        this.clientOptions.client_id,
+        this.clientOptions.client_secret,
+        this.customerOptions.refresh_token
+      );
+    }
+
+    const credentials = grpc.credentials.combineChannelCredentials(sslCreds, grpc.credentials.createFromGoogleCredential(authClient));
     return credentials;
   }
 
-  protected loadService<T = AllServices>(service: ServiceName): T {
+  protected async loadService<T = AllServices>(service: ServiceName): Promise<T> {
     const serviceCacheKey = `${service}_${this.customerOptions.refresh_token}`;
 
     if (serviceCache.has(serviceCacheKey)) {
@@ -107,7 +117,7 @@ export class Service {
 
     // Initialising services can take a few ms, so we cache when possible.
     const client = new protoService({
-      sslCreds: this.getCredentials(),
+      sslCreds: await this.getCredentials(),
     });
 
     serviceCache.set(serviceCacheKey, client);
@@ -152,14 +162,14 @@ export class Service {
     };
   }
 
-  protected buildSearchRequestAndService(
+  protected async buildSearchRequestAndService(
     gaql: string,
     options?: RequestOptions
-  ): {
+  ): Promise<{
     service: GoogleAdsServiceClient;
     request: services.SearchGoogleAdsRequest;
-  } {
-    const service: GoogleAdsServiceClient = this.loadService(
+  }> {
+    const service: GoogleAdsServiceClient = await this.loadService(
       "GoogleAdsServiceClient"
     );
     const request: services.SearchGoogleAdsRequest =
@@ -171,14 +181,14 @@ export class Service {
     return { service, request };
   }
 
-  protected buildSearchStreamRequestAndService(
+  protected async buildSearchStreamRequestAndService(
     gaql: string,
     options?: RequestOptions
-  ): {
+  ): Promise<{
     service: GoogleAdsServiceClient;
     request: services.SearchGoogleAdsStreamRequest;
-  } {
-    const service: GoogleAdsServiceClient = this.loadService(
+  }> {
+    const service: GoogleAdsServiceClient = await this.loadService(
       "GoogleAdsServiceClient"
     );
     const request: services.SearchGoogleAdsStreamRequest =
@@ -190,14 +200,14 @@ export class Service {
     return { service, request };
   }
 
-  protected buildMutationRequestAndService<T>(
+  protected async buildMutationRequestAndService<T>(
     mutations: MutateOperation<T>[],
     options?: MutateOptions
-  ): {
+  ): Promise<{
     service: GoogleAdsServiceClient;
     request: services.MutateGoogleAdsRequest;
-  } {
-    const service: GoogleAdsServiceClient = this.loadService(
+  }> {
+    const service: GoogleAdsServiceClient = await this.loadService(
       "GoogleAdsServiceClient"
     );
 
