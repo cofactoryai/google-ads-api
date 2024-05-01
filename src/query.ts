@@ -123,7 +123,7 @@ export function validateConstraintKeyAndValue(
   val: ParsedConstraintValue;
 } {
   if (typeof val === "number" || typeof val === "boolean") {
-    return { op: "=", val: convertNumericEnumToString(key, val) };
+    return { op, val: convertNumericEnumToString(key, val) };
   }
 
   if (typeof val === "string") {
@@ -132,7 +132,7 @@ export function validateConstraintKeyAndValue(
     }
 
     return {
-      op: "=",
+      op,
       val: new RegExp(/^'.*'$|^".*"$/g).test(val) ? val : `"${val}"`,
     }; // must start and end in either single or double quotation marks
   }
@@ -148,7 +148,7 @@ export function validateConstraintKeyAndValue(
       })
       .join(`, `);
 
-    return { op: "IN", val: `(${stringifiedValue})` };
+    return { op: op === "IN" ? op : "=", val: `(${stringifiedValue})` };
   }
 
   throw new Error(QueryError.INVALID_CONSTRAINT_VALUE(key, val));
