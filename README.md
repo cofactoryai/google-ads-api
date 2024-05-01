@@ -143,8 +143,8 @@ If you prefer to use the [Google Ads Query Language](https://developers.google.c
 
 ```ts
 const campaigns = await customer.query(`
-  SELECT 
-    campaign.id, 
+  SELECT
+    campaign.id,
     campaign.name,
     campaign.bidding_strategy_type,
     campaign_budget.amount_micros,
@@ -152,7 +152,7 @@ const campaigns = await customer.query(`
     metrics.clicks,
     metrics.impressions,
     metrics.all_conversions
-  FROM 
+  FROM
     campaign
   WHERE
     campaign.status = "ENABLED"
@@ -194,7 +194,7 @@ import { enums } from "google-ads-api";
 const stream = customer.reportStream({
   entity: "ad_group_criterion",
   attributes: [
-    "ad_group_criterion.keyword.text", 
+    "ad_group_criterion.keyword.text",
     "ad_group_criterion.status",
   ],
   constraints: {
@@ -250,7 +250,7 @@ import { enums, parse } from "google-ads-api";
 const reportOptions = {
   entity: "ad_group_criterion",
   attributes: [
-    "ad_group_criterion.keyword.text", 
+    "ad_group_criterion.keyword.text",
     "ad_group_criterion.status",
   ],
   constraints: {
@@ -693,3 +693,34 @@ try {
   }
 }
 ```
+```
+
+# Service Account Authentication
+
+The library now supports service account OAuth authentication. To use this feature, you must provide your service account credentials as a JSON string, which can be obtained from the Google Cloud Console.
+
+## Setting up Service Account Credentials
+
+1. Obtain your service account JSON key file from the Google Cloud Console.
+2. Set the `GOOGLE_ADS_SERVICE_ACCOUNT_JSON` environment variable with the JSON contents of your service account key file.
+
+```bash
+export GOOGLE_ADS_SERVICE_ACCOUNT_JSON='{"type": "service_account", ...}'
+```
+
+## Initializing the Client with Service Account Credentials
+
+```ts
+import { GoogleAdsApi } from "google-ads-api";
+
+const client = new GoogleAdsApi({
+  developer_token: "<DEVELOPER-TOKEN>",
+  service_account_json: process.env.GOOGLE_ADS_SERVICE_ACCOUNT_JSON,
+});
+
+// Use the client as usual
+```
+
+The client will automatically handle the generation of a JWT and exchange it for an access token which will be used for making authorized API calls.
+
+This feature is backward compatible with the existing OAuth flow. If you provide a refresh token, the client will use the standard OAuth flow. If you provide a service account JSON, the client will use the service account flow.
