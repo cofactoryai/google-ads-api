@@ -152,11 +152,8 @@ export class Service {
       }
     }
 
-    // Removed the unused partial_failure_error variable from the destructuring
-    return {
-      ...response,
-      mutate_operation_responses,
-    } as T;
+    // Return an object with only the mutate_operation_responses array
+    return { mutate_operation_responses } as T;
   }
 
   protected buildSearchRequestAndService(
