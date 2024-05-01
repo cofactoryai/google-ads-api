@@ -141,19 +141,27 @@ export class Service {
     return googleAdsFailure;
   }
 
-  protected decodePartialFailureError<T>(response: T & { partial_failure_error?: { details?: Array<{ type_url: string; value: Buffer }> } }): T {
-    if (!response.partial_failure_error) {
-      return response;
+  public decodePartialFailureError<T>(response: T & { partial_failure_error?: { details?: Array<{ type_url: string; value: Buffer }> } }): T {
+    if (!response.partial_failure_error || response.partial_failure_error.details?.length === 0) {
+      const { partial_failure_error, ...rest } = response;
+      return {
+        ...rest,
+        mutate_operation_responses: [],
+      } as T;
     }
     const buffer = response.partial_failure_error.details?.find((d) => d.type_url.includes("errors.GoogleAdsFailure"))?.value;
-    if (!buffer) {
-      return response;
+    if (buffer) {
+      const decodedError = this.decodeGoogleAdsFailureBuffer(buffer);
+      return {
+        ...response,
+        mutate_operation_responses: [decodedError],
+      } as T;
     }
-    // Update the partial failure field with the decoded error details
+    const { partial_failure_error, ...rest } = response;
     return {
-      ...response,
-      partial_failure_error: this.decodeGoogleAdsFailureBuffer(buffer),
-    };
+      ...rest,
+      mutate_operation_responses: [],
+    } as T;
   }
 
   protected buildSearchRequestAndService(
@@ -188,7 +196,7 @@ export class Service {
     return { service, request };
   }
 
-  protected buildMutationRequestAndService<T>(
+  protected buildMutationRequestAndService<T extends Record<string, unknown>>(
     mutations: MutateOperation<T>[],
     options?: MutateOptions
   ): {
@@ -200,8 +208,11 @@ export class Service {
       const operation: MutateOperation<T> = {
         operation: mutation.operation ?? "create",
         resource: mutation.resource,
+        entity: mutation.entity,
         exempt_policy_violation_keys: mutation.exempt_policy_violation_keys,
         update_mask: mutation.operation === "update" ? getFieldMask(mutation.resource) : undefined,
+        // Spread any additional properties from T that are not toJSON
+        ...(mutation.resource as Omit<T, 'toJSON'>),
       };
       const mutateOperation = new services.MutateOperation({
         [toSnakeCase(`${mutation.entity}Operation`)]: operation,

@@ -28,6 +28,7 @@
     "long": "^4.0.0"
   },
   "devDependencies": {
+    "@types/google-protobuf": "^3.15.12",
     "@types/jest": "^29.0.1",
     "@types/pluralize": "^0.0.29",
     "@typescript-eslint/eslint-plugin": "^4.8.2",
