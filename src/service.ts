@@ -142,25 +142,20 @@ export class Service {
   }
 
   public decodePartialFailureError<T>(response: T & { partial_failure_error?: { details?: Array<{ type_url: string; value: Buffer }> } }): T {
-    if (!response.partial_failure_error || response.partial_failure_error.details?.length === 0) {
-      const { partial_failure_error, ...rest } = response;
-      return {
-        ...rest,
-        mutate_operation_responses: [],
-      } as T;
-    }
-    const buffer = response.partial_failure_error.details?.find((d) => d.type_url.includes("errors.GoogleAdsFailure"))?.value;
+    let mutate_operation_responses: errors.GoogleAdsFailure[] = [];
+
+    const buffer = response.partial_failure_error?.details?.find((d) => d.type_url.includes("errors.GoogleAdsFailure"))?.value;
     if (buffer) {
       const decodedError = this.decodeGoogleAdsFailureBuffer(buffer);
-      return {
-        ...response,
-        mutate_operation_responses: [decodedError],
-      } as T;
+      if (decodedError.errors && decodedError.errors.length > 0) {
+        mutate_operation_responses = [decodedError];
+      }
     }
-    const { partial_failure_error, ...rest } = response;
+
+    // Removed the unused partial_failure_error variable from the destructuring
     return {
-      ...rest,
-      mutate_operation_responses: [],
+      ...response,
+      mutate_operation_responses,
     } as T;
   }
 
