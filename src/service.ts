@@ -141,7 +141,7 @@ export class Service {
     return googleAdsFailure;
   }
 
-  public decodePartialFailureError<T>(response: T & { partial_failure_error?: { details?: Array<{ type_url: string; value: Buffer }> } }): T {
+  public decodePartialFailureError<T>(response: T & { partial_failure_error?: { details?: Array<{ type_url: string; value: Buffer }> } }): { mutate_operation_responses: errors.GoogleAdsFailure[] } {
     let mutate_operation_responses: errors.GoogleAdsFailure[] = [];
 
     const buffer = response.partial_failure_error?.details?.find((d) => d.type_url.includes("errors.GoogleAdsFailure"))?.value;
@@ -153,7 +153,7 @@ export class Service {
     }
 
     // Return an object with only the mutate_operation_responses array
-    return { mutate_operation_responses } as T;
+    return { mutate_operation_responses };
   }
 
   protected buildSearchRequestAndService(
