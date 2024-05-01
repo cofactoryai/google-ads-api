@@ -39,6 +39,27 @@ const serviceCache = new TTLCache<ServiceName, GoogleAdsServiceClient>({
   },
 });
 
+interface IMutateOperationResponse {
+  ad_group_ad_label_result?: services.IMutateAdGroupAdLabelResult | null;
+  ad_group_ad_result?: services.IMutateAdGroupAdResult | null;
+  ad_group_asset_result?: services.IMutateAdGroupAssetResult | null;
+  ad_group_bid_modifier_result?: services.IMutateAdGroupBidModifierResult | null;
+  ad_group_criterion_customizer_result?: services.IMutateAdGroupCriterionCustomizerResult | null;
+  ad_group_criterion_label_result?: services.IMutateAdGroupCriterionLabelResult | null;
+  ad_group_criterion_result?: services.IMutateAdGroupCriterionResult | null;
+  ad_group_customizer_result?: services.IMutateAdGroupCustomizerResult | null;
+  ad_group_extension_setting_result?: services.IMutateAdGroupExtensionSettingResult | null;
+  ad_group_feed_result?: services.IMutateAdGroupFeedResult | null;
+  ad_group_label_result?: services.IMutateAdGroupLabelResult | null;
+  ad_group_result?: services.IMutateAdGroupResult | null;
+  ad_parameter_result?: services.IMutateAdParameterResult | null;
+  ad_result?: services.IMutateAdResult | null;
+  asset_result?: services.IMutateAssetResult | null;
+  asset_group_asset_result?: services.IMutateAssetGroupAssetResult | null;
+  asset_group_listing_group_filter_result?: services.IMutateAssetGroupListingGroupFilterResult | null;
+  // ... other properties as identified in the protos.d.ts file
+}
+
 export class Service {
   protected readonly clientOptions: ClientOptions;
   protected readonly customerOptions: CustomerOptions;
@@ -141,19 +162,45 @@ export class Service {
     return googleAdsFailure;
   }
 
-  public decodePartialFailureError<T>(response: T & { partial_failure_error?: { details?: Array<{ type_url: string; value: Buffer }> } }): { mutate_operation_responses: errors.GoogleAdsFailure[] } {
-    let mutate_operation_responses: errors.GoogleAdsFailure[] = [];
+  public decodePartialFailureError<T>(response: T & { partial_failure_error?: { details?: Array<{ type_url: string; value: Buffer }> } }): services.MutateGoogleAdsResponse {
+    let mutate_operation_responses: IMutateOperationResponse[] = [];
+    let results: Array<{ operation: string; response: IMutateOperationResponse; }> = []; // New results array with specific type
 
     const buffer = response.partial_failure_error?.details?.find((d) => d.type_url.includes("errors.GoogleAdsFailure"))?.value;
     if (buffer) {
       const decodedError = this.decodeGoogleAdsFailureBuffer(buffer);
       if (decodedError.errors && decodedError.errors.length > 0) {
-        mutate_operation_responses = [decodedError];
+        // Create a specific error response for each GoogleAdsError
+        mutate_operation_responses = decodedError.errors.map(() => {
+          // Determine the correct property to use based on the error type
+          const operationResponse: IMutateOperationResponse = {};
+          // ... handle error types similarly, populating the properties as needed
+          return operationResponse;
+        });
+        // Populate the results array with the corresponding responses
+        results = mutate_operation_responses.map((operationResponse) => {
+          return {
+            operation: 'operationType', // This should be determined based on the operation type
+            response: operationResponse as IMutateOperationResponse, // Cast to the specific type
+          };
+        });
       }
     }
 
-    // Return an object with only the mutate_operation_responses array
-    return { mutate_operation_responses };
+    const mutateGoogleAdsResponse: services.MutateGoogleAdsResponse = {
+      partial_failure_error: response.partial_failure_error,
+      mutate_operation_responses: mutate_operation_responses,
+      results: results, // Include the results property in the response
+      toJSON: function() {
+        return {
+          partial_failure_error: this.partial_failure_error,
+          mutate_operation_responses: this.mutate_operation_responses,
+          results: this.results // Include results in the toJSON method
+        };
+      }
+    };
+
+    return mutateGoogleAdsResponse;
   }
 
   protected buildSearchRequestAndService(
