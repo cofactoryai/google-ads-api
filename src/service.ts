@@ -27,6 +27,7 @@ export interface CallHeaders {
   "developer-token": string;
   "login-customer-id"?: string;
   "linked-customer-id"?: string;
+  "Authorization"?: string;
 }
 
 // A global service cache to avoid re-initialising services
@@ -43,6 +44,7 @@ export class Service {
   protected readonly clientOptions: ClientOptions;
   protected readonly customerOptions: CustomerOptions;
   protected readonly hooks: Hooks;
+  private accessToken: string | null = null;
 
   constructor(
     clientOptions: ClientOptions,
@@ -55,6 +57,10 @@ export class Service {
 
     // @ts-expect-error All fields don't need to be set here
     this.serviceCache = {};
+  }
+
+  public setAccessToken(token: string | null): void {
+    this.accessToken = token;
   }
 
   public get credentials(): CustomerCredentials {
@@ -74,6 +80,9 @@ export class Service {
     }
     if (this.customerOptions.linked_customer_id) {
       headers["linked-customer-id"] = this.customerOptions.linked_customer_id;
+    }
+    if (this.accessToken) {
+      headers["Authorization"] = `Bearer ${this.accessToken}`;
     }
     return headers;
   }
@@ -275,5 +284,17 @@ export class Service {
       ...options,
     };
     return request as unknown as Req;
+  }
+
+  public getServiceClient<T = AllServices>(service: ServiceName): T {
+    return this.loadService(service);
+  }
+
+  public getCallHeaders(): CallHeaders {
+    return this.callHeaders;
+  }
+
+  public processGoogleAdsError(error: Error): errors.GoogleAdsFailure | Error {
+    return this.getGoogleAdsError(error);
   }
 }
