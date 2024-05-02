@@ -18,9 +18,12 @@
   "license": "MIT",
   "dependencies": {
     "@isaacs/ttlcache": "^1.2.2",
+    "@types/jsonwebtoken": "^9.0.6",
+    "axios": "^1.6.8",
     "google-ads-node": "^13.0.0",
     "google-auth-library": "^7.1.0",
     "google-gax": "^4.3.1",
+    "jsonwebtoken": "^9.0.2",
     "long": "^4.0.0"
   },
   "devDependencies": {
