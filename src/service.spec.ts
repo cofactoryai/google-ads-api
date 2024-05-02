@@ -10,6 +10,9 @@ import {
   MOCK_DEVELOPER_TOKEN,
 } from "./testUtils";
 import { googleAdsVersion } from "../src/version";
+import jwt from 'jsonwebtoken';
+import axios from 'axios';
+import { ServiceAccountKey } from './client';
 
 beforeAll(() => {
   // Timeout required as the first service load can take a while

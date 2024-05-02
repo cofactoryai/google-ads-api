@@ -15,8 +15,8 @@ export interface ClientOptions {
   login_customer_id?: string; // Added login_customer_id to ClientOptions
 }
 
-// Define an interface for the structure of a Google service account JSON file
-interface ServiceAccountKey {
+// Exporting the ServiceAccountKey interface for use in other modules
+export interface ServiceAccountKey {
   type: string;
   project_id: string;
   private_key_id: string;
