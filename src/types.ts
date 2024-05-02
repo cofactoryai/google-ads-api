@@ -2,15 +2,30 @@ import { services, fields } from "./protos";
 
 export interface CustomerOptions {
   customer_id: string;
-  refresh_token: string;
+  refresh_token?: string; // Made optional to support service accounts
   login_customer_id?: string;
   linked_customer_id?: string;
+  service_account?: ServiceAccountKey; // Added to support service account authentication
 }
 
 export type CustomerCredentials = Pick<
   CustomerOptions,
   "customer_id" | "login_customer_id" | "linked_customer_id"
 >;
+
+// Define an interface for the structure of a Google service account JSON file
+export interface ServiceAccountKey {
+  type: string;
+  project_id: string;
+  private_key_id: string;
+  private_key: string;
+  client_email: string;
+  client_id: string;
+  auth_uri: string;
+  token_uri: string;
+  auth_provider_x509_cert_url: string;
+  client_x509_cert_url: string;
+}
 
 export interface ReportOptions extends RequestOptions {
   entity: fields.Resource;
@@ -98,6 +113,7 @@ export type ConstraintType1 = {
   op: ConstraintOperation;
   val: ConstraintValue;
 };
+
 export type ConstraintType2 = { [C in ConstraintKey]?: ConstraintValue };
 
 export type Constraint = string | ConstraintType1 | ConstraintType2;
