@@ -12,7 +12,6 @@ import {
 import { googleAdsVersion } from "../src/version";
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
-import { ServiceAccountKey } from './client';
 
 beforeAll(() => {
   // Timeout required as the first service load can take a while
@@ -229,9 +228,9 @@ describe("Service", () => {
   describe("Service Account Authentication", () => {
     it("should authenticate using a service account and make an API call", async () => {
       // Ensure the environment variable for service account credentials is defined
-      const serviceAccountJson = process.env.GOOGLE_ADS_SERVICE_ACCOUNT_JSON;
+      const serviceAccountJson = process.env.GOOGLE_ADS_SERVICE_ACCOUNT_CREDENTIALS;
       if (!serviceAccountJson) {
-        throw new Error('The GOOGLE_ADS_SERVICE_ACCOUNT_JSON environment variable is not defined.');
+        throw new Error('The GOOGLE_ADS_SERVICE_ACCOUNT_CREDENTIALS environment variable is not defined.');
       }
       const serviceAccountKey = JSON.parse(serviceAccountJson);
 
@@ -254,16 +253,15 @@ describe("Service", () => {
       const accessToken = tokenResponse.data.access_token;
 
       // Make an authenticated API call
-      const customer = newCustomer({ service_account: serviceAccountKey });
+      const customer = newCustomer();
       customer.setAccessToken(accessToken);
-      const serviceClient = customer.getServiceClient("GoogleAdsServiceClient");
-      const request = customer.buildSearchRequest({
+      const request = {
         query: 'SELECT campaign.id, campaign.name FROM campaign ORDER BY campaign.id',
-      });
+      };
 
-      const response = await serviceClient.search(request);
+      const response = await customer.query(request.query);
       expect(response).toBeDefined();
-      expect(response.results).toBeInstanceOf(Array);
+      expect(Array.isArray(response)).toEqual(true);
     });
   });
 });
