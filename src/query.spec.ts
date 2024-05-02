@@ -6,6 +6,7 @@ import {
   QueryError,
   buildSelectClause,
   buildFromClause,
+  getFromClause,
   validateConstraintKeyAndValue,
   convertNumericEnumToString,
   extractConstraintConditions,
@@ -94,7 +95,7 @@ describe("buildFromClause", () => {
   });
 
   it("correctly parses entity", () => {
-    const fromClause = buildFromClause(options.entity);
+    const fromClause = buildFromClause(getFromClause(options.entity));
     expect(fromClause).toEqual(` FROM ad_group`);
   });
 });
@@ -718,7 +719,7 @@ describe("buildQuery", () => {
         ad_group.name, ad_group.id, metrics.impressions, metrics.cost_micros, segments.date
       FROM
         ad_group
-      WHERE 
+      WHERE
         ad_group.status = "PAUSED"
         AND campaign.advertising_channel_type = "SEARCH"
         AND metrics.clicks > 10

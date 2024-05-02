@@ -42,7 +42,7 @@ export class Customer extends ServiceFactory {
     return response;
   }
 
-  /** 
+  /**
     @description Stream query using a raw GAQL string. If a generic type is provided, it must be the type of a single row.
     If a summary row is requested then this will be the last emitted row of the stream.
     @hooks onStreamStart, onStreamError
@@ -60,7 +60,7 @@ export class Customer extends ServiceFactory {
     }
   }
 
-  /** 
+  /**
     @description Single query using ReportOptions.
     If a summary row is requested then this will be the first row of the results.
     @hooks onQueryStart, onQueryError, onQueryEnd
@@ -98,7 +98,7 @@ export class Customer extends ServiceFactory {
     return totalResultsCount;
   }
 
-  /** 
+  /**
     @description Stream query using ReportOptions. If a generic type is provided, it must be the type of a single row.
     If a summary row is requested then this will be the last emitted row of the stream.
     @hooks onStreamStart, onStreamError
@@ -116,7 +116,7 @@ export class Customer extends ServiceFactory {
     }
   }
 
-  /** 
+  /**
     @description Retreive the raw stream using ReportOptions.
     @hooks onStreamStart
     @example
@@ -400,7 +400,7 @@ export class Customer extends ServiceFactory {
    * campaign budget, or perform up to thousands of mutates atomically.
    * @hooks onMutationStart, onMutationError, onMutationEnd
    */
-  public async mutateResources<T>(
+  public async mutateResources<T extends Record<string, any>>(
     mutations: MutateOperation<T>[],
     mutateOptions: MutateOptions = {}
   ): Promise<services.MutateGoogleAdsResponse> {
@@ -444,7 +444,7 @@ export class Customer extends ServiceFactory {
       )[0] as services.MutateGoogleAdsResponse;
 
       const parsedResponse = request.partial_failure
-        ? this.decodePartialFailureError(response)
+        ? this.decodePartialFailureError(response as services.MutateGoogleAdsResponse & { partial_failure_error?: { details?: { type_url: string; value: Buffer; }[] | undefined; } })
         : response;
 
       if (this.hooks.onMutationEnd) {

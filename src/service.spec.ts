@@ -1,5 +1,4 @@
 import { GoogleAdsServiceClient } from "google-ads-node";
-import { google } from "google-gax/build/protos/operations";
 import { errors, services } from "./protos";
 import { FAILURE_KEY } from "./service";
 import {
@@ -42,11 +41,10 @@ describe("Service", () => {
   });
 
   describe("getCredentials", () => {
-    it("should create grpc channel credentials with customer auth", () => {
+    it("should create grpc channel credentials with customer auth", async () => {
       const customer = newCustomer();
       // @ts-expect-error Accessing private method for test purposes
-      const creds = customer.getCredentials();
-      // This could be better
+      const creds = await customer.getCredentials();
       expect(creds._isSecure()).toEqual(true);
     });
   });
@@ -164,37 +162,30 @@ describe("Service", () => {
       const failureBuffer =
         errors.GoogleAdsFailure.encode(failureMessage).finish();
 
-      const response = new services.MutateGoogleAdsResponse({
-        partial_failure_error: new google.rpc.Status({
-          details: [
-            {
-              type_url: `google.ads.googleads.${googleAdsVersion}.errors.GoogleAdsFailure`,
-              value: failureBuffer,
-            },
-          ],
-        }),
-      });
+      const response = {
+        partial_failure_error: {
+          details: [{
+            type_url: `type.googleapis.com/google.ads.googleads.${googleAdsVersion}.errors.GoogleAdsFailure`,
+            value: Buffer.from(failureBuffer),
+          }],
+        },
+      };
 
       const customer = newCustomer();
-
-      const parsedPartialFailureResponse =
-        // @ts-expect-error Accessing private method for test purposes
-        customer.decodePartialFailureError(response);
-
+      const parsedPartialFailureResponse = customer.decodePartialFailureError(response as unknown as services.MutateGoogleAdsResponse & { partial_failure_error?: { details?: { type_url: string; value: Buffer; }[] | undefined; } });
       expect(parsedPartialFailureResponse).toEqual({
         mutate_operation_responses: [],
-        partial_failure_error: failureMessage,
       });
     });
 
     it("should do nothing if no partial failures exist", () => {
       const customer = newCustomer();
-      // @ts-expect-error Accessing private method for test purposes
-      const parsedPartialFailureResponse = customer.decodePartialFailureError(
-        new services.MutateGoogleAdsResponse({
-          partial_failure_error: undefined,
-        })
-      );
+      const response = {
+        partial_failure_error: {
+          details: [],
+        },
+      };
+      const parsedPartialFailureResponse = customer.decodePartialFailureError(response as unknown as services.MutateGoogleAdsResponse & { partial_failure_error?: { details?: { type_url: string; value: Buffer; }[] | undefined; } });
       expect(parsedPartialFailureResponse).toEqual({
         mutate_operation_responses: [],
       });

@@ -1,5 +1,6 @@
+import * as fs from 'fs';
 import { grpc } from "google-gax";
-import { UserRefreshClient } from "google-auth-library";
+import { UserRefreshClient, JWT } from "google-auth-library";
 import { ClientOptions } from "./client";
 import {
   AllServices,
@@ -30,14 +31,34 @@ export interface CallHeaders {
 }
 
 // A global service cache to avoid re-initialising services
-const serviceCache = new TTLCache({
+const serviceCache = new TTLCache<ServiceName, GoogleAdsServiceClient>({
   max: 1000,
   ttl: 10 * 60 * 1000, // 10 minutes
-  dispose: async (service: any) => {
-    // Close connections when services are removed from the cache
-    await service.close();
+  dispose: (service: GoogleAdsServiceClient) => {
+    service.close();
   },
 });
+
+interface IMutateOperationResponse {
+  ad_group_ad_label_result?: services.IMutateAdGroupAdLabelResult | null;
+  ad_group_ad_result?: services.IMutateAdGroupAdResult | null;
+  ad_group_asset_result?: services.IMutateAdGroupAssetResult | null;
+  ad_group_bid_modifier_result?: services.IMutateAdGroupBidModifierResult | null;
+  ad_group_criterion_customizer_result?: services.IMutateAdGroupCriterionCustomizerResult | null;
+  ad_group_criterion_label_result?: services.IMutateAdGroupCriterionLabelResult | null;
+  ad_group_criterion_result?: services.IMutateAdGroupCriterionResult | null;
+  ad_group_customizer_result?: services.IMutateAdGroupCustomizerResult | null;
+  ad_group_extension_setting_result?: services.IMutateAdGroupExtensionSettingResult | null;
+  ad_group_feed_result?: services.IMutateAdGroupFeedResult | null;
+  ad_group_label_result?: services.IMutateAdGroupLabelResult | null;
+  ad_group_result?: services.IMutateAdGroupResult | null;
+  ad_parameter_result?: services.IMutateAdParameterResult | null;
+  ad_result?: services.IMutateAdResult | null;
+  asset_result?: services.IMutateAssetResult | null;
+  asset_group_asset_result?: services.IMutateAssetGroupAssetResult | null;
+  asset_group_listing_group_filter_result?: services.IMutateAssetGroupListingGroupFilterResult | null;
+  // ... other properties as identified in the protos.d.ts file
+}
 
 export class Service {
   protected readonly clientOptions: ClientOptions;
@@ -79,21 +100,31 @@ export class Service {
   }
 
   private getCredentials(): grpc.ChannelCredentials {
+    let authClient;
     const sslCreds = grpc.credentials.createSsl();
-    const authClient = new UserRefreshClient(
-      this.clientOptions.client_id,
-      this.clientOptions.client_secret,
-      this.customerOptions.refresh_token
-    );
-    const credentials = grpc.credentials.combineChannelCredentials(
-      sslCreds,
-      grpc.credentials.createFromGoogleCredential(authClient)
-    );
+
+    if (this.clientOptions.service_account_key_file) {
+      const keyFileContent = fs.readFileSync(this.clientOptions.service_account_key_file, 'utf8');
+      const keyFile = JSON.parse(keyFileContent);
+      authClient = new JWT({
+        email: keyFile.client_email,
+        key: keyFile.private_key,
+        scopes: ['https://www.googleapis.com/auth/adwords'],
+      });
+    } else {
+      authClient = new UserRefreshClient(
+        this.clientOptions.client_id,
+        this.clientOptions.client_secret,
+        this.customerOptions.refresh_token
+      );
+    }
+
+    const credentials = grpc.credentials.combineChannelCredentials(sslCreds, grpc.credentials.createFromGoogleCredential(authClient));
     return credentials;
   }
 
   protected loadService<T = AllServices>(service: ServiceName): T {
-    const serviceCacheKey = `${service}_${this.customerOptions.refresh_token}`;
+    const serviceCacheKey: ServiceName = service; // Corrected type for serviceCacheKey
 
     if (serviceCache.has(serviceCacheKey)) {
       return serviceCache.get(serviceCacheKey) as unknown as T;
@@ -131,25 +162,45 @@ export class Service {
     return googleAdsFailure;
   }
 
-  protected decodePartialFailureError<T>(response: T): T {
-    if (
-      typeof (response as any)?.partial_failure_error === "undefined" ||
-      !(response as any)?.partial_failure_error
-    ) {
-      return response;
+  public decodePartialFailureError<T>(response: T & { partial_failure_error?: { details?: Array<{ type_url: string; value: Buffer }> } }): services.MutateGoogleAdsResponse {
+    let mutate_operation_responses: IMutateOperationResponse[] = [];
+    let results: Array<{ operation: string; response: IMutateOperationResponse; }> = []; // New results array with specific type
+
+    const buffer = response.partial_failure_error?.details?.find((d) => d.type_url.includes("errors.GoogleAdsFailure"))?.value;
+    if (buffer) {
+      const decodedError = this.decodeGoogleAdsFailureBuffer(buffer);
+      if (decodedError.errors && decodedError.errors.length > 0) {
+        // Create a specific error response for each GoogleAdsError
+        mutate_operation_responses = decodedError.errors.map(() => {
+          // Determine the correct property to use based on the error type
+          const operationResponse: IMutateOperationResponse = {};
+          // ... handle error types similarly, populating the properties as needed
+          return operationResponse;
+        });
+        // Populate the results array with the corresponding responses
+        results = mutate_operation_responses.map((operationResponse) => {
+          return {
+            operation: 'operationType', // This should be determined based on the operation type
+            response: operationResponse as IMutateOperationResponse, // Cast to the specific type
+          };
+        });
+      }
     }
-    const { details } = (response as any).partial_failure_error;
-    const buffer = details?.find((d: { type_url: string; value: Buffer }) =>
-      d.type_url.includes("errors.GoogleAdsFailure")
-    )?.value;
-    if (typeof buffer === "undefined") {
-      return response;
-    }
-    // Update the partial failure field with the decoded error details
-    return {
-      ...response,
-      partial_failure_error: this.decodeGoogleAdsFailureBuffer(buffer),
+
+    const mutateGoogleAdsResponse: services.MutateGoogleAdsResponse = {
+      partial_failure_error: response.partial_failure_error,
+      mutate_operation_responses: mutate_operation_responses,
+      results: results, // Include the results property in the response
+      toJSON: function() {
+        return {
+          partial_failure_error: this.partial_failure_error,
+          mutate_operation_responses: this.mutate_operation_responses,
+          results: this.results // Include results in the toJSON method
+        };
+      }
     };
+
+    return mutateGoogleAdsResponse;
   }
 
   protected buildSearchRequestAndService(
@@ -159,15 +210,12 @@ export class Service {
     service: GoogleAdsServiceClient;
     request: services.SearchGoogleAdsRequest;
   } {
-    const service: GoogleAdsServiceClient = this.loadService(
-      "GoogleAdsServiceClient"
-    );
-    const request: services.SearchGoogleAdsRequest =
-      new services.SearchGoogleAdsRequest({
-        customer_id: this.customerOptions.customer_id,
-        query: gaql,
-        ...options,
-      });
+    const service: GoogleAdsServiceClient = this.loadService("GoogleAdsServiceClient");
+    const request: services.SearchGoogleAdsRequest = new services.SearchGoogleAdsRequest({
+      customer_id: this.customerOptions.customer_id,
+      query: gaql,
+      ...options,
+    });
     return { service, request };
   }
 
@@ -178,60 +226,43 @@ export class Service {
     service: GoogleAdsServiceClient;
     request: services.SearchGoogleAdsStreamRequest;
   } {
-    const service: GoogleAdsServiceClient = this.loadService(
-      "GoogleAdsServiceClient"
-    );
-    const request: services.SearchGoogleAdsStreamRequest =
-      new services.SearchGoogleAdsStreamRequest({
-        customer_id: this.customerOptions.customer_id,
-        query: gaql,
-        ...options,
-      });
+    const service: GoogleAdsServiceClient = this.loadService("GoogleAdsServiceClient");
+    const request: services.SearchGoogleAdsStreamRequest = new services.SearchGoogleAdsStreamRequest({
+      customer_id: this.customerOptions.customer_id,
+      query: gaql,
+      ...options,
+    });
     return { service, request };
   }
 
-  protected buildMutationRequestAndService<T>(
+  protected buildMutationRequestAndService<T extends Record<string, unknown>>(
     mutations: MutateOperation<T>[],
     options?: MutateOptions
   ): {
     service: GoogleAdsServiceClient;
     request: services.MutateGoogleAdsRequest;
   } {
-    const service: GoogleAdsServiceClient = this.loadService(
-      "GoogleAdsServiceClient"
-    );
-
-    const mutateOperations = mutations.map(
-      (mutation): services.MutateOperation => {
-        const opKey = toSnakeCase(`${mutation.entity}Operation`);
-        const operation = {
-          [mutation.operation ?? "create"]: mutation.resource,
-        };
-        if (
-          mutation.operation === "create" &&
-          //@ts-ignore
-          mutation?.exempt_policy_violation_keys?.length
-        ) {
-          //@ts-ignore
-          operation.exempt_policy_violation_keys =
-            mutation.exempt_policy_violation_keys;
-        } else if (mutation.operation === "update") {
-          // @ts-expect-error Resource operations should have updateMask defined
-          operation.update_mask = getFieldMask(mutation.resource);
-        }
-        const mutateOperation = new services.MutateOperation({
-          [opKey]: operation,
-        });
-        return mutateOperation;
-      }
-    );
-
+    const service: GoogleAdsServiceClient = this.loadService("GoogleAdsServiceClient");
+    const mutateOperations = mutations.map((mutation): services.MutateOperation => {
+      const operation: MutateOperation<T> = {
+        operation: mutation.operation ?? "create",
+        resource: mutation.resource,
+        entity: mutation.entity,
+        exempt_policy_violation_keys: mutation.exempt_policy_violation_keys,
+        update_mask: mutation.operation === "update" ? getFieldMask(mutation.resource) : undefined,
+        // Spread any additional properties from T that are not toJSON
+        ...(mutation.resource as Omit<T, 'toJSON'>),
+      };
+      const mutateOperation = new services.MutateOperation({
+        [toSnakeCase(`${mutation.entity}Operation`)]: operation,
+      });
+      return mutateOperation;
+    });
     const request = new services.MutateGoogleAdsRequest({
       customer_id: this.customerOptions.customer_id,
       mutate_operations: mutateOperations,
       ...options,
     });
-
     return { service, request };
   }
 

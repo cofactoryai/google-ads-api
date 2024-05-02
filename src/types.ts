@@ -1,4 +1,4 @@
-import { services, fields } from "./protos";
+import { services, protobuf, fields } from "./protos";
 
 export interface CustomerOptions {
   customer_id: string;
@@ -13,7 +13,7 @@ export type CustomerCredentials = Pick<
 >;
 
 export interface ReportOptions extends RequestOptions {
-  entity: fields.Resource;
+  entity: string;
   attributes?: fields.Attributes;
   metrics?: fields.Metrics;
   segments?: fields.Segments;
@@ -70,7 +70,7 @@ export interface Order {
   sort_order?: SortOrder;
 }
 
-export type ConstraintKey = fields.Attribute | fields.Metric | fields.Segment;
+export type ConstraintKey = string; // Updated to be a string type to satisfy index signature requirements
 export type ConstraintValue = number | string | boolean | (number | string)[];
 export type ConstraintOperation =
   | "="
@@ -116,9 +116,10 @@ export type MutateOptions = Omit<
 
 export type MutateOperation<T> = {
   resource: T;
-  entity: fields.Resource;
+  entity: string;
   operation?: "create" | "update" | "remove";
   exempt_policy_violation_keys?: services.AdGroupCriterionOperation["exempt_policy_violation_keys"];
+  update_mask?: protobuf.FieldMask;
 } & Partial<Omit<T, "toJSON">>;
 
 export type PageToken = services.ISearchGoogleAdsResponse["next_page_token"];

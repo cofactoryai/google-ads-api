@@ -91,12 +91,27 @@ export function buildSelectClause(
   return `${QueryKeywords.SELECT} ${selections}` as const;
 }
 
-export function buildFromClause(entity: ReportOptions["entity"]): FromClause {
+const entityToFromClauseMap: Record<string, FromClause> = {
+  'campaign': ' FROM campaign' as FromClause,
+  'ad_group': ' FROM ad_group' as FromClause,
+  'ad_schedule_view': ' FROM ad_schedule_view' as FromClause,
+  // ... additional entities and their corresponding FromClause literals
+};
+
+export function getFromClause(entity: string): FromClause {
+  const fromClause = entityToFromClauseMap[entity];
+  if (!fromClause) {
+    throw new Error(`Invalid entity: ${entity}`);
+  }
+  return fromClause;
+}
+
+export function buildFromClause(entity: FromClause): FromClause {
   if (typeof entity === "undefined") {
     throw new Error(QueryError.UNDEFINED_ENTITY);
   }
 
-  return ` ${QueryKeywords.FROM} ${entity}` as const;
+  return entity;
 }
 
 export function validateConstraintKeyAndValue(
@@ -108,7 +123,7 @@ export function validateConstraintKeyAndValue(
   val: ParsedConstraintValue;
 } {
   if (typeof val === "number" || typeof val === "boolean") {
-    return { op: "=", val: convertNumericEnumToString(key, val) };
+    return { op, val: convertNumericEnumToString(key, val) };
   }
 
   if (typeof val === "string") {
@@ -117,7 +132,7 @@ export function validateConstraintKeyAndValue(
     }
 
     return {
-      op: "=",
+      op,
       val: new RegExp(/^'.*'$|^".*"$/g).test(val) ? val : `"${val}"`,
     }; // must start and end in either single or double quotation marks
   }
@@ -133,7 +148,7 @@ export function validateConstraintKeyAndValue(
       })
       .join(`, `);
 
-    return { op: "IN", val: `(${stringifiedValue})` };
+    return { op: op === "IN" ? op : "=", val: `(${stringifiedValue})` };
   }
 
   throw new Error(QueryError.INVALID_CONSTRAINT_VALUE(key, val));
@@ -164,31 +179,26 @@ export function extractConstraintConditions(
   } else if (Array.isArray(constraints)) {
     return constraints.map((con: Constraint) => {
       if (typeof con === "object" && !Array.isArray(con) && con !== null) {
-        // @ts-ignore
         if (con.key && con.op && typeof con.val !== "undefined") {
           const { key, op, val }: ConstraintType1 = con as ConstraintType1;
-
           if (typeof key !== "string") {
             throw new Error(QueryError.INVALID_CONSTRAINT_KEY);
           }
           const validatedValue = validateConstraintKeyAndValue(key, op, val);
-          // @ts-ignore
-          return `${key} ${op} ${validatedValue.val}` as const;
+          return `${key} ${validatedValue.op} ${validatedValue.val}` as ConstraintString;
         } else if (Object.keys(con).length === 1) {
           const [[key, val]] = Object.entries(con);
-
           const validatedValue = validateConstraintKeyAndValue(
             key as ConstraintKey,
             "=",
             val as ConstraintValue
           );
-
-          return `${key} ${validatedValue.op} ${validatedValue.val}` as const;
+          return `${key} ${validatedValue.op} ${validatedValue.val}` as ConstraintString;
         } else {
           throw new Error(QueryError.INVALID_CONSTRAINT_OBJECT_FORMAT);
         }
       } else if (typeof con === "string") {
-        return con;
+        return con as ConstraintString;
       } else {
         throw new Error(QueryError.INVALID_CONSTRAINT_OBJECT_FORMAT);
       }
@@ -201,7 +211,7 @@ export function extractConstraintConditions(
         val as ConstraintValue
       );
 
-      return `${key} ${validatedValue.op} ${validatedValue.val}` as const;
+      return `${key} ${validatedValue.op} ${validatedValue.val}` as ConstraintString;
     });
   } else {
     throw new Error(QueryError.INVALID_CONSTRAINTS_FORMAT);
@@ -406,7 +416,7 @@ export function buildQuery(reportOptions: Readonly<ReportOptions>): {
     reportOptions.metrics,
     reportOptions.segments
   );
-  const FROM: FromClause = buildFromClause(reportOptions.entity);
+  const FROM: FromClause = buildFromClause(getFromClause(reportOptions.entity));
   const WHERE: WhereClause = buildWhereClause(
     reportOptions.constraints,
     reportOptions.date_constant,
