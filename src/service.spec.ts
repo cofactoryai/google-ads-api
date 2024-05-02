@@ -225,4 +225,45 @@ describe("Service", () => {
       });
     });
   });
+
+  describe("Service Account Authentication", () => {
+    it("should authenticate using a service account and make an API call", async () => {
+      // Ensure the environment variable for service account credentials is defined
+      const serviceAccountJson = process.env.GOOGLE_ADS_SERVICE_ACCOUNT_JSON;
+      if (!serviceAccountJson) {
+        throw new Error('The GOOGLE_ADS_SERVICE_ACCOUNT_JSON environment variable is not defined.');
+      }
+      const serviceAccountKey = JSON.parse(serviceAccountJson);
+
+      // Generate JWT
+      const jwtToken = jwt.sign({
+        iss: serviceAccountKey.client_email,
+        sub: serviceAccountKey.client_email,
+        scope: 'https://www.googleapis.com/auth/adwords',
+        aud: 'https://oauth2.googleapis.com/token',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        iat: Math.floor(Date.now() / 1000),
+      }, serviceAccountKey.private_key, { algorithm: 'RS256' });
+
+      // Exchange JWT for access token
+      const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: jwtToken,
+      });
+
+      const accessToken = tokenResponse.data.access_token;
+
+      // Make an authenticated API call
+      const customer = newCustomer({ service_account: serviceAccountKey });
+      customer.setAccessToken(accessToken);
+      const serviceClient = customer.getServiceClient("GoogleAdsServiceClient");
+      const request = customer.buildSearchRequest({
+        query: 'SELECT campaign.id, campaign.name FROM campaign ORDER BY campaign.id',
+      });
+
+      const response = await serviceClient.search(request);
+      expect(response).toBeDefined();
+      expect(response.results).toBeInstanceOf(Array);
+    });
+  });
 });
